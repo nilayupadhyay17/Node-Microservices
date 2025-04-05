@@ -12,6 +12,8 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq:5672
+    networks:
+      - app-network
 
   identity-service:
     build: ./identity-service
@@ -22,6 +24,8 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq:5672
+    networks:
+      - app-network
 
   post-service:
     build: ./post-service
@@ -32,6 +36,8 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq:5672
+    networks:
+      - app-network
 
   media-service:
     build: ./media-service
@@ -42,6 +48,8 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq:5672
+    networks:
+      - app-network
 
   search-service:
     build: ./search-service
@@ -52,11 +60,20 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq:5672
+    networks:
+      - app-network
 
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - app-network
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -68,3 +85,25 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    networks:
+      - app-network
+  mongodb:
+    image: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongo-data:

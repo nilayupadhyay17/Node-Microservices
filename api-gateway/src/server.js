@@ -11,7 +11,7 @@ const errorHandler = require("./middleware/errorhandler");
 const { validateToken } = require("./middleware/authMiddleware");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 
 const redisClient = new Redis(process.env.REDIS_URL);
 
