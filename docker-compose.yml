@@ -18,9 +18,12 @@ services:
   identity-service:
     build: ./identity-service
     env_file: ./identity-service/.env
+    ports:
+      - "4005:4005"
     depends_on:
       - redis
       - rabbitmq
+      - mongodb
     environment:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq:5672
@@ -33,6 +36,9 @@ services:
     depends_on:
       - redis
       - rabbitmq
+      - mongodb
+    ports:
+      - "4007:4007"
     environment:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq:5672
@@ -45,6 +51,9 @@ services:
     depends_on:
       - redis
       - rabbitmq
+      - mongodb
+    ports:
+      - "4006:4006"
     environment:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq:5672
@@ -57,6 +66,9 @@ services:
     depends_on:
       - redis
       - rabbitmq
+      - mongodb
+    ports:
+      - "4008:4008"
     environment:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq:5672
