@@ -3,19 +3,32 @@ const logger = require("./logger");
 
 let connection = null;
 let channel = null;
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 5000;
 
 const EXCHANGE_NAME = "facebook_events";
+async function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-async function connectToRabbitMQ() {
-  try {
-    connection = await amqp.connect(process.env.RABBITMQ_URL);
-    channel = await connection.createChannel();
+async function connectToRabbitMQ(retries = MAX_RETRIES) {
+  while (retries > 0) {
+    try {
+      connection = await amqp.connect(process.env.RABBITMQ_URL);
+      channel = await connection.createChannel();
 
-    await channel.assertExchange(EXCHANGE_NAME, "topic", { durable: false });
-    logger.info("Connected to rabbit mq");
-    return channel;
-  } catch (e) {
-    logger.error("Error connecting to rabbit mq", e);
+      await channel.assertExchange(EXCHANGE_NAME, "topic", { durable: false });
+      logger.info("✅ Connected to RabbitMQ");
+      return channel;
+    } catch (e) {
+      logger.error(`❌ Error connecting to RabbitMQ. Retries left: ${retries - 1}`, e);
+      retries--;
+      if (retries === 0) {
+        logger.error("🚫 All retries failed. RabbitMQ connection could not be established.");
+        throw e;
+      }
+      await delay(RETRY_DELAY_MS);
+    }
   }
 }
 
