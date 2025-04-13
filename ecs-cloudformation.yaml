@@ -224,11 +224,18 @@ Resources:
           Image: redis:alpine
           Essential: true
           PortMappings: [{ContainerPort: 6379}]
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub /ecs/${EnvironmentName}-redis
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: ecs
           HealthCheck:
             Command: ["CMD", "redis-cli", "ping"]
             Interval: 30
             Timeout: 10
             Retries: 5
+            StartPeriod: 60
 
   RabbitMQTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -247,6 +254,12 @@ Resources:
           PortMappings: 
             - ContainerPort: 5672
             - ContainerPort: 15672
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub /ecs/${EnvironmentName}-rabbitMQ
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: ecs
           Environment:
             - Name: RABBITMQ_DEFAULT_USER
               Value: "guest"
@@ -268,16 +281,20 @@ Resources:
       Cpu: '1024'
       Memory: '2048'
       ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
-      Volumes: [{Name: mongo-data}]
       ContainerDefinitions:
         - Name: mongodb
-          Image: mongo
+          Image: mongo:5.0
           Essential: true
           PortMappings: [{ContainerPort: 27017}]
-          MountPoints: [{SourceVolume: mongo-data, ContainerPath: /data/db}]
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub /ecs/${EnvironmentName}-mongo
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: ecs
           HealthCheck:
-            Command: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
-            Interval: 30
+            Command: ["CMD-SHELL", "mongo --quiet --eval \"db.runCommand({ ping: 1 })\""]
+            Interval: 60
             Timeout: 10
             Retries: 5
             StartPeriod: 30
@@ -297,6 +314,12 @@ Resources:
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-apigateway:latest
           Essential: true
           PortMappings: [{ContainerPort: 4000}]
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub /ecs/${EnvironmentName}-api-gateway
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: ecs
           Environment:
             - Name: NODE_ENV
               Value: !Ref EnvironmentName
@@ -330,6 +353,12 @@ Resources:
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-identity_service:latest
           Essential: true
           PortMappings: [{ContainerPort: 4005}]
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub /ecs/${EnvironmentName}-identity
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: ecs
           Environment:
             - Name: JWT_SECRET
               Value: !Ref JwtSecret
