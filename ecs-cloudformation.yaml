@@ -158,6 +158,57 @@ Resources:
               - !Ref Subnet1
               - !Ref Subnet2
 
+  PostService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-post
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      TaskDefinition: !Ref PostServiceTaskDefinition
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TestSecurityGroup
+          Subnets: 
+              - !Ref Subnet1
+              - !Ref Subnet2
+
+  MediaService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-media
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      TaskDefinition: !Ref MediaServiceTaskDefinition
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TestSecurityGroup
+          Subnets: 
+              - !Ref Subnet1
+              - !Ref Subnet2
+
+  SearchService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-search
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      TaskDefinition: !Ref SearchServiceTaskDefinition
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TestSecurityGroup
+          Subnets: 
+              - !Ref Subnet1
+              - !Ref Subnet2
+
   # Task Definitions (same as previous template)
   RedisTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -206,6 +257,7 @@ Resources:
             Interval: 30
             Timeout: 10
             Retries: 5
+            StartPeriod: 30
 
   MongoDBTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -228,6 +280,7 @@ Resources:
             Interval: 30
             Timeout: 10
             Retries: 5
+            StartPeriod: 30
 
   ApiGatewayTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -249,12 +302,12 @@ Resources:
               Value: !Ref EnvironmentName
             - Name: IDENTITY_SERVICE_URL
               Value: !Sub http://${IdentityService.Name}:4005
-            # - Name: POST_SERVICE_URL
-            #   Value: !Sub http://${PostService.Name}:4007
-            # - Name: MEDIA_SERVICE_URL
-            #   Value: !Sub http://${MediaService.Name}:4006
-            # - Name: SEARCH_SERVICE_URL
-            #   Value: !Sub http://${SearchService.Name}:4008
+            - Name: POST_SERVICE_URL
+              Value: !Sub http://${PostService.Name}:4007
+            - Name: MEDIA_SERVICE_URL
+              Value: !Sub http://${MediaService.Name}:4006
+            - Name: SEARCH_SERVICE_URL
+              Value: !Sub http://${SearchService.Name}:4008
             - Name: REDIS_URL
               Value: !Sub redis://${RedisService.Name}:6379
             - Name: JWT_SECRET
@@ -288,6 +341,87 @@ Resources:
               Value: !Sub amqp://guest:guest@${RabbitMQService.Name}:5672
             - Name: MONGODB_URI
               Value: !Sub mongodb://${MongoDBService.Name}:27017/identity-db
+
+  PostServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-post
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: post-service
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-identity_service:latest
+          Essential: true
+          PortMappings: [{ContainerPort: 4007}]
+          Environment:
+            - Name: JWT_SECRET
+              Value: !Ref JwtSecret
+            - Name: PORT
+              Value: '4007'
+            - Name: REDIS_URL
+              Value: !Sub redis://${RedisService.Name}:6379
+            - Name: RABBITMQ_URL
+              Value: !Sub amqp://guest:guest@${RabbitMQService.Name}:5672
+            - Name: MONGODB_URI
+              Value: !Sub mongodb://${MongoDBService.Name}:27017/post-db
+
+  MediaServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-media
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: media-service
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-media_service:latest
+          Essential: true
+          PortMappings: [{ContainerPort: 4006}]
+          Environment:
+            - Name: JWT_SECRET
+              Value: !Ref JwtSecret
+            - Name: PORT
+              Value: '4006'
+            - Name: REDIS_URL
+              Value: !Sub redis://${RedisService.Name}:6379
+            - Name: RABBITMQ_URL
+              Value: !Sub amqp://guest:guest@${RabbitMQService.Name}:5672
+            - Name: MONGODB_URI
+              Value: !Sub mongodb://${MongoDBService.Name}:27017/media-db
+
+  SearchServiceTaskDefinition:
+      Type: AWS::ECS::TaskDefinition
+      Properties:
+        Family: !Sub ${EnvironmentName}-search
+        NetworkMode: awsvpc
+        RequiresCompatibilities: [FARGATE]
+        Cpu: '512'
+        Memory: '1024'
+        ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+        TaskRoleArn: !GetAtt ECSTaskRole.Arn
+        ContainerDefinitions:
+          - Name: media-service
+            Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-search_service:latest
+            Essential: true
+            PortMappings: [{ContainerPort: 4008}]
+            Environment:
+              - Name: JWT_SECRET
+                Value: !Ref JwtSecret
+              - Name: PORT
+                Value: '4008'
+              - Name: REDIS_URL
+                Value: !Sub redis://${RedisService.Name}:6379
+              - Name: RABBITMQ_URL
+                Value: !Sub amqp://guest:guest@${RabbitMQService.Name}:5672
+              - Name: MONGODB_URI
+                Value: !Sub mongodb://${MongoDBService.Name}:27017/search-db
 
   # IAM Roles
   ECSExecutionRole:
