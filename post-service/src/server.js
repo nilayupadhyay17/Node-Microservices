@@ -24,6 +24,8 @@ const redisClient = new Redis(process.env.REDIS_URL);
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
+app.get('/health', (req, res) => res.sendStatus(200));
+ 
 
 app.use((req, res, next) => {
   logger.info(`Received ${req.method} request to ${req.url}`);
