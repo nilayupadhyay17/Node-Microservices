@@ -1,0 +1,332 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Microservices Test Deployment on ECS (Default VPC)'
+
+Parameters:
+  EnvironmentName:
+    Description: 'Environment name (dev/test)'
+    Type: String
+    Default: 'test'
+  CloudinaryCloudName:
+    Description: 'Cloudinary cloud name'
+    Type: String
+    Default: 'dz44iskt7'
+  CloudinaryApiKey:
+    Description: 'Cloudinary API key'
+    Type: String
+    Default: '873211933489193'
+  CloudinaryApiSecret:
+    Description: 'Cloudinary API secret'
+    Type: String
+    NoEcho: true
+    Default: 'B6e8m_GqP3kPtGN5-UPe5wxhm3Q'
+  JwtSecret:
+    Description: 'JWT secret key'
+    Type: String
+    NoEcho: true
+    Default: 'JWT_SECRET'
+  Subnet1:
+    Type: AWS::EC2::Subnet::Id
+  Subnet2:
+    Type: AWS::EC2::Subnet::Id
+  VpcId:
+    Description: The ID of the VPC
+    Type: AWS::EC2::VPC::Id
+
+Resources:
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${EnvironmentName}-microservices-test
+      CapacityProviders:
+        - FARGATE
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-microservices-test
+
+  # Security Group for all services
+  TestSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for test services'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 4000
+          ToPort: 4008
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5672
+          ToPort: 5672
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 15672
+          ToPort: 15672
+          CidrIp: 0.0.0.0/0
+
+  # Database Services
+  RedisService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-redis
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      TaskDefinition: !Ref RedisTaskDefinition
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TestSecurityGroup
+          Subnets: 
+            - !Ref Subnet1
+            - !Ref Subnet2
+  RabbitMQService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-rabbitmq
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      TaskDefinition: !Ref RabbitMQTaskDefinition
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TestSecurityGroup
+          Subnets: 
+              - !Ref Subnet1
+              - !Ref Subnet2
+
+  MongoDBService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-mongodb
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      TaskDefinition: !Ref MongoDBTaskDefinition
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TestSecurityGroup
+          Subnets: 
+              - !Ref Subnet1
+              - !Ref Subnet2
+
+  # Application Services
+  ApiGatewayService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-api-gateway
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      TaskDefinition: !Ref ApiGatewayTaskDefinition
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TestSecurityGroup
+          Subnets: 
+            - !Ref Subnet1
+            - !Ref Subnet2
+
+  IdentityService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-identity
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      TaskDefinition: !Ref IdentityServiceTaskDefinition
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref TestSecurityGroup
+          Subnets: 
+              - !Ref Subnet1
+              - !Ref Subnet2
+
+  # Task Definitions (same as previous template)
+  RedisTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-redis
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: '256'
+      Memory: '512'
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: redis
+          Image: redis:alpine
+          Essential: true
+          PortMappings: [{ContainerPort: 6379}]
+          HealthCheck:
+            Command: ["CMD", "redis-cli", "ping"]
+            Interval: 30
+            Timeout: 10
+            Retries: 5
+
+  RabbitMQTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-rabbitmq
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: rabbitmq
+          Image: rabbitmq:3-management
+          User: rabbitmq
+          Essential: true
+          PortMappings: 
+            - ContainerPort: 5672
+            - ContainerPort: 15672
+          Environment:
+            - Name: RABBITMQ_DEFAULT_USER
+              Value: "guest"
+            - Name: RABBITMQ_DEFAULT_PASS
+              Value: "guest"
+          HealthCheck:
+            Command: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+            Interval: 30
+            Timeout: 10
+            Retries: 5
+
+  MongoDBTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-mongodb
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: '1024'
+      Memory: '2048'
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      Volumes: [{Name: mongo-data}]
+      ContainerDefinitions:
+        - Name: mongodb
+          Image: mongo
+          Essential: true
+          PortMappings: [{ContainerPort: 27017}]
+          MountPoints: [{SourceVolume: mongo-data, ContainerPath: /data/db}]
+          HealthCheck:
+            Command: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+            Interval: 30
+            Timeout: 10
+            Retries: 5
+
+  ApiGatewayTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-api-gateway
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: api-gateway
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-apigateway:latest
+          Essential: true
+          PortMappings: [{ContainerPort: 4000}]
+          Environment:
+            - Name: NODE_ENV
+              Value: !Ref EnvironmentName
+            - Name: IDENTITY_SERVICE_URL
+              Value: !Sub http://${IdentityService.Name}:4005
+            # - Name: POST_SERVICE_URL
+            #   Value: !Sub http://${PostService.Name}:4007
+            # - Name: MEDIA_SERVICE_URL
+            #   Value: !Sub http://${MediaService.Name}:4006
+            # - Name: SEARCH_SERVICE_URL
+            #   Value: !Sub http://${SearchService.Name}:4008
+            - Name: REDIS_URL
+              Value: !Sub redis://${RedisService.Name}:6379
+            - Name: JWT_SECRET
+              Value: !Ref JwtSecret
+            - Name: PORT
+              Value: '4000'
+
+  IdentityServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-identity
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: identity-service
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-identity_service:latest
+          Essential: true
+          PortMappings: [{ContainerPort: 4005}]
+          Environment:
+            - Name: JWT_SECRET
+              Value: !Ref JwtSecret
+            - Name: PORT
+              Value: '4005'
+            - Name: REDIS_URL
+              Value: !Sub redis://${RedisService.Name}:6379
+            - Name: RABBITMQ_URL
+              Value: !Sub amqp://guest:guest@${RabbitMQService.Name}:5672
+            - Name: MONGODB_URI
+              Value: !Sub mongodb://${MongoDBService.Name}:27017/identity-db
+
+  # IAM Roles
+  ECSExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: [ecs-tasks.amazonaws.com]}
+            Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: [ecs-tasks.amazonaws.com]}
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: MicroservicesAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+
+Outputs:
+  ApiGatewayEndpoint:
+    Description: 'API Gateway endpoint'
+    Value: !Sub http://${ApiGatewayService.Name}.${AWS::Region}.compute.amazonaws.com:4000
+  RabbitMQManagement:
+    Description: 'RabbitMQ Management Console'
+    Value: !Sub http://${RabbitMQService.Name}.${AWS::Region}.compute.amazonaws.com:15672
