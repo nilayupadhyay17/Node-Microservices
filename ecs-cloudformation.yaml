@@ -33,6 +33,12 @@ Parameters:
     Type: AWS::EC2::VPC::Id
 
 Resources:
+  ServiceDiscoveryNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: node.local
+      Vpc: !Ref VpcId
+      Description: Service discovery for ECS services
   # ECS Cluster
   ECSCluster:
     Type: AWS::ECS::Cluster
@@ -40,6 +46,8 @@ Resources:
       ClusterName: !Sub ${EnvironmentName}-microservices-test
       CapacityProviders:
         - FARGATE
+      ServiceConnectDefaults:
+        Namespace: !Ref ServiceDiscoveryNamespace
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-microservices-test
@@ -89,6 +97,14 @@ Resources:
           Subnets: 
             - !Ref Subnet1
             - !Ref Subnet2
+      ServiceConnectConfiguration:
+        Enabled: true
+        Services:
+          - PortName: redis
+            DiscoveryName: redis
+            ClientAliases:
+              - Port: 6379
+                DnsName: redis
   RabbitMQService:
     Type: AWS::ECS::Service
     Properties:
@@ -105,6 +121,14 @@ Resources:
           Subnets: 
               - !Ref Subnet1
               - !Ref Subnet2
+      ServiceConnectConfiguration:
+        Enabled: true
+        Services:
+          - PortName: rabbitmq
+            DiscoveryName: rabbitmq
+            ClientAliases:
+              - Port: 5672
+                DnsName: rabbitmq
 
   MongoDBService:
     Type: AWS::ECS::Service
@@ -122,7 +146,14 @@ Resources:
           Subnets: 
               - !Ref Subnet1
               - !Ref Subnet2
-
+      ServiceConnectConfiguration:
+       Enabled: true
+       Services:
+          - PortName: mongodb
+            DiscoveryName: mongodb
+            ClientAliases:
+            - Port: 27017
+              DnsName: mongodb     
   # Application Services
   ApiGatewayService:
     Type: AWS::ECS::Service
@@ -140,7 +171,15 @@ Resources:
           Subnets: 
             - !Ref Subnet1
             - !Ref Subnet2
-
+      ServiceConnectConfiguration:
+        Enabled: true
+        Services:
+          - PortName: api-gateway
+            DiscoveryName: api-gateway
+            ClientAliases:
+              - Port: 4000
+                DnsName: api-gateway
+    
   IdentityService:
     Type: AWS::ECS::Service
     Properties:
@@ -157,6 +196,14 @@ Resources:
           Subnets: 
               - !Ref Subnet1
               - !Ref Subnet2
+      ServiceConnectConfiguration:
+        Enabled: true
+        Services:
+          - PortName: identity-service
+            DiscoveryName: identity-service
+            ClientAliases:
+              - Port: 4005
+                DnsName: identity-service      
 
   PostService:
     Type: AWS::ECS::Service
@@ -174,6 +221,15 @@ Resources:
           Subnets: 
               - !Ref Subnet1
               - !Ref Subnet2
+      ServiceConnectConfiguration:
+        Enabled: true
+        Services:
+          - PortName: post-service
+            DiscoveryName: post-service
+            ClientAliases:
+              - Port: 4007
+                DnsName: post-service      
+
 
   MediaService:
     Type: AWS::ECS::Service
@@ -191,6 +247,15 @@ Resources:
           Subnets: 
               - !Ref Subnet1
               - !Ref Subnet2
+      ServiceConnectConfiguration:
+        Enabled: true
+        Services:
+          - PortName: media-service
+            DiscoveryName: media-service
+            ClientAliases:
+              - Port: 4006
+                DnsName: media-service      
+
 
   SearchService:
     Type: AWS::ECS::Service
@@ -208,6 +273,15 @@ Resources:
           Subnets: 
               - !Ref Subnet1
               - !Ref Subnet2
+      ServiceConnectConfiguration:
+        Enabled: true
+        Services:
+          - PortName: search-service
+            DiscoveryName: search-service
+            ClientAliases:
+              - Port: 4008
+                DnsName: search-service      
+
 
   # Task Definitions (same as previous template)
   RedisTaskDefinition:
@@ -223,7 +297,9 @@ Resources:
         - Name: redis
           Image: redis:alpine
           Essential: true
-          PortMappings: [{ContainerPort: 6379}]
+          PortMappings: 
+          - ContainerPort: 6379
+            Name: redis
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -254,6 +330,7 @@ Resources:
           PortMappings: 
             - ContainerPort: 5672
             - ContainerPort: 15672
+              Name: rabbitmq
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -285,7 +362,9 @@ Resources:
         - Name: mongodb
           Image: mongo:5.0
           Essential: true
-          PortMappings: [{ContainerPort: 27017}]
+          PortMappings: 
+          - ContainerPort: 27017
+            Name: mongodb 
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -313,7 +392,9 @@ Resources:
         - Name: api-gateway
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-apigateway:latest
           Essential: true
-          PortMappings: [{ContainerPort: 4000}]
+          PortMappings: 
+          - ContainerPort: 4000
+            Name: api-gateway
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -352,7 +433,9 @@ Resources:
         - Name: identity-service
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-identity_service:latest
           Essential: true
-          PortMappings: [{ContainerPort: 4005}]
+          PortMappings: 
+          - ContainerPort: 4005
+            Name: identity-service
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -385,7 +468,9 @@ Resources:
         - Name: post-service
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-identity_service:latest
           Essential: true
-          PortMappings: [{ContainerPort: 4007}]
+          PortMappings: 
+          - ContainerPort: 4007
+            Name: post-service
           Environment:
             - Name: JWT_SECRET
               Value: !Ref JwtSecret
@@ -412,7 +497,9 @@ Resources:
         - Name: media-service
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-media_service:latest
           Essential: true
-          PortMappings: [{ContainerPort: 4006}]
+          PortMappings: 
+          - ContainerPort: 4006
+            Name: media-service
           Environment:
             - Name: JWT_SECRET
               Value: !Ref JwtSecret
@@ -439,7 +526,9 @@ Resources:
           - Name: media-service
             Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/node-microservices-search_service:latest
             Essential: true
-            PortMappings: [{ContainerPort: 4008}]
+            PortMappings: 
+            - ContainerPort: 4008
+              Name: search-service
             Environment:
               - Name: JWT_SECRET
                 Value: !Ref JwtSecret
